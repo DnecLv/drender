@@ -50,6 +50,14 @@ impl State {
             )
             .await
             .unwrap();
+        if cfg!(debug_assertions) {
+            let adapter_info = adapter.get_info();
+            let gpu_info = format!(
+                "正在使用 {}, 后端图形接口为 {:?}。",
+                adapter_info.name, adapter_info.backend
+            );
+            println!("{gpu_info}");
+        }
         let caps = surface.get_capabilities(&adapter);
         let config = wgpu::SurfaceConfiguration {
             usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
