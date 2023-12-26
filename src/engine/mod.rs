@@ -1,27 +1,40 @@
+use raw_window_handle::HasRawDisplayHandle;
+use std::iter;
 use winit::{
     event::*,
     event_loop::{self, ControlFlow, EventLoop, EventLoopBuilder},
     window,
     window::{WindowBuilder, WindowId},
 };
+
 mod state;
 use state::State;
 mod renderer;
 use renderer::Renderer;
 mod plugin;
 use plugin::Plugin;
-
+mod egui_layer;
+use egui_layer::EguiLayer;
 pub struct Engine {
     state: State,
     // scene: Scene,
     renderer: Renderer,
-    // egui_layer: EguiLayer,
+    egui_layer: EguiLayer,
     plugins: Vec<Box<dyn Plugin>>,
 }
+
+#[allow(unused)]
+#[derive(Debug)]
+pub struct CustomJsTriggerEvent {
+    ty: &'static str,
+    value: String,
+}
+
 impl Engine {
-    pub fn new() -> (Engine, EventLoop<()>) {
+    pub fn new() -> (Engine, EventLoop<CustomJsTriggerEvent>) {
         env_logger::init();
-        let event_loop = EventLoop::new();
+        // let event_loop = EventLoop::new();
+        let event_loop = EventLoopBuilder::<CustomJsTriggerEvent>::with_user_event().build();
         // let window = window::WindowBuilder::new().build(&event_loop).unwrap();
         let window = WindowBuilder::new()
             .with_inner_size(winit::dpi::PhysicalSize::new(512, 512))
@@ -33,6 +46,7 @@ impl Engine {
         (
             Self {
                 renderer: Renderer::new(&state),
+                egui_layer: EguiLayer::new(&state, &event_loop),
                 state: state,
                 plugins: vec![],
             },
@@ -45,7 +59,7 @@ impl Engine {
     pub fn current_window_id(&self) -> WindowId {
         self.state.window.id()
     }
-    pub fn run(mut self, event_loop: EventLoop<()>) {
+    pub fn run(mut self, event_loop: EventLoop<CustomJsTriggerEvent>) {
         event_loop.run(move |event, _, control_flow| {
             let window = &self.state.window;
 
@@ -97,38 +111,34 @@ impl Engine {
             }
         });
     }
-    fn render(&self) -> Result<(), wgpu::SurfaceError>{
-        self.renderer.render(&self.state)
-        // let frame = self.state.surface.get_current_frame().unwrap();
-        // let view = frame
-        //     .output
-        //     .texture
-        //     .create_view(&wgpu::TextureViewDescriptor::default());
-        // let mut encoder = self
-        //     .state
-        //     .device
-        //     .create_command_encoder(&wgpu::CommandEncoderDescriptor {
-        //         label: Some("Render Encoder"),
-        //     });
-        // {
-        //     let _render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
-        //         label: Some("Render Pass"),
-        //         color_attachments: &[wgpu::RenderPassColorAttachment {
-        //             view: &view,
-        //             resolve_target: None,
-        //             ops: wgpu::Operations {
-        //                 load: wgpu::LoadOp::Clear(wgpu::Color {
-        //                     r: 0.1,
-        //                     g: 0.2,
-        //                     b: 0.3,
-        //                     a: 1.0,
-        //                 }),
-        //                 store: true,
-        //             },
-        //         }],
-        //         depth_stencil_attachment: None,
-        //     });
+    fn render(&mut self) -> Result<(), wgpu::SurfaceError> {
+        // self.renderer.render(&self.state)
+        let output = self.state.surface.get_current_texture()?;
+        let view = output
+            .texture
+            .create_view(&wgpu::TextureViewDescriptor::default());
+        let mut encoder =
+            self.state
+                .device
+                .create_command_encoder(&wgpu::CommandEncoderDescriptor {
+                    label: Some("Render Encoder"),
+                });
+        self.renderer.render(&self.state, &mut encoder,&view);
+        let ebuffer = self.egui_layer.render(&self.state, &mut encoder,&view);
+        // drop(render_pass);
+        self.state.queue.submit(
+ebuffer
+                .into_iter()
+                .chain(std::iter::once(encoder.finish()))
+        );
         // }
-        // self.state.queue.submit(Some(encoder.finish()));
+        // self.app.queue.submit(
+        //     egui_cmd_bufs
+        //         .into_iter()
+        //         .chain(std::iter::once(encoder.finish()))
+        // );
+        // self.app.queue.submit(std::iter::once(encoder.finish()));
+        output.present();
+        Ok(())
     }
 }

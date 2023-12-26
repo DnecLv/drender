@@ -1,6 +1,5 @@
 use super::state::State;
 use wgpu::util::DeviceExt;
-use std::iter;
 
 #[repr(C)]
 #[derive(Copy, Clone, Debug, bytemuck::Pod, bytemuck::Zeroable)]
@@ -43,9 +42,9 @@ const VERTICES: &[Vertex] = &[
     },
 ];
 pub struct Renderer{
-    render_pipeline: wgpu::RenderPipeline,
-    vertex_buffer: wgpu::Buffer,
-    num_vertices: u32,
+    pub render_pipeline: wgpu::RenderPipeline,
+    pub vertex_buffer: wgpu::Buffer,
+    pub num_vertices: u32,
 }
 impl Renderer{
     pub fn new(app:&State) -> Self{
@@ -117,19 +116,9 @@ impl Renderer{
             num_vertices,
         }
     }
-    pub fn render(&self,app:&State) -> Result<(), wgpu::SurfaceError> {
-        let output = app.surface.get_current_texture()?;
-        let view = output
-            .texture
-            .create_view(&wgpu::TextureViewDescriptor::default());
-        let mut encoder = app
-            .device
-            .create_command_encoder(&wgpu::CommandEncoderDescriptor {
-                label: Some("Render Encoder"),
-            });
-
+    pub fn render(&mut self, state: &State, encoder: &mut wgpu::CommandEncoder,view: &wgpu::TextureView) {
         let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
-            label: Some("Render Pass"),
+            label: Some("Final Render Pass"),
             color_attachments: &[
                 // 这就是片元着色器中 @location(0) 标记指向的颜色附件
                 Some(wgpu::RenderPassColorAttachment {
@@ -151,29 +140,10 @@ impl Renderer{
         });
 
         // 新添加!
-        render_pass.set_pipeline(&self.render_pipeline); // 2. 
+
+        render_pass.set_pipeline(&self.render_pipeline); // 2.
         render_pass.set_vertex_buffer(0, self.vertex_buffer.slice(..));
         // render_pass.draw(0..3, 0..1);
         render_pass.draw(0..self.num_vertices, 0..1);
-
-        drop(render_pass);
-        // submit 命令能接受任何实现了 IntoIter trait 的参数
-        // if let Some(egui_cmd_bufs) = egui_cmd_bufs {
-        //     self.app.queue.submit(
-        //         egui_cmd_bufs
-        //             .into_iter()
-        //             .chain(iter::once(encoder.finish())),
-        //     );
-        // } else {
-        app.queue.submit(iter::once(encoder.finish()));
-        // }
-        // self.app.queue.submit(
-        //     egui_cmd_bufs
-        //         .into_iter()
-        //         .chain(std::iter::once(encoder.finish()))
-        // );
-        // self.app.queue.submit(std::iter::once(encoder.finish()));
-        output.present();
-        Ok(())
     }
 }
