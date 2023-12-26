@@ -405,6 +405,7 @@ dependencies = [
  "egui-wgpu",
  "egui-winit",
  "env_logger",
+ "instant",
  "log",
  "pollster",
  "raw-window-handle",

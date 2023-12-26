@@ -37,7 +37,7 @@ impl Engine {
         let event_loop = EventLoopBuilder::<CustomJsTriggerEvent>::with_user_event().build();
         // let window = window::WindowBuilder::new().build(&event_loop).unwrap();
         let window = WindowBuilder::new()
-            .with_inner_size(winit::dpi::PhysicalSize::new(512, 512))
+            .with_inner_size(winit::dpi::PhysicalSize::new(1024, 768))
             .with_title("D-Render")
             .build(&event_loop)
             .unwrap();
@@ -59,6 +59,9 @@ impl Engine {
     pub fn current_window_id(&self) -> WindowId {
         self.state.window.id()
     }
+    fn ui_event(&mut self, event: &winit::event::WindowEvent<'_>) {
+        self.egui_layer.ui_event(event);
+    }
     pub fn run(mut self, event_loop: EventLoop<CustomJsTriggerEvent>) {
         event_loop.run(move |event, _, control_flow| {
             let window = &self.state.window;
@@ -70,6 +73,7 @@ impl Engine {
                 } if window_id == self.current_window_id() =>
                 // if !state.input(event)
                 {
+                    self.ui_event(event);
                     match event {
                         WindowEvent::CloseRequested
                         | WindowEvent::KeyboardInput {
@@ -126,18 +130,15 @@ impl Engine {
         self.renderer.render(&self.state, &mut encoder,&view);
         let ebuffer = self.egui_layer.render(&self.state, &mut encoder,&view);
         // drop(render_pass);
-        self.state.queue.submit(
-ebuffer
-                .into_iter()
-                .chain(std::iter::once(encoder.finish()))
-        );
-        // }
-        // self.app.queue.submit(
-        //     egui_cmd_bufs
-        //         .into_iter()
-        //         .chain(std::iter::once(encoder.finish()))
-        // );
-        // self.app.queue.submit(std::iter::once(encoder.finish()));
+        if let Some(egui_cmd_bufs) = ebuffer {
+            self.state.queue.submit(
+                egui_cmd_bufs
+                    .into_iter()
+                    .chain(iter::once(encoder.finish())),
+            );
+        } else {
+            self.state.queue.submit(iter::once(encoder.finish()));
+        }
         output.present();
         Ok(())
     }
