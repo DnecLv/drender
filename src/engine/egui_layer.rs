@@ -1,6 +1,8 @@
 use egui::{Color32, Context, Ui};
 use egui::{FontId, RichText};
 
+use crate::utils::Timer;
+
 use super::state::State;
 use raw_window_handle::HasRawDisplayHandle;
 use wgpu::CommandBuffer;
@@ -23,7 +25,7 @@ impl EguiLayer {
             egui_state,
             egui_renderer,
             egui_repaint: 2,
-            controller: Controller { count: 0 },
+            controller: Controller::new(),
         }
     }
     pub fn render(
@@ -36,6 +38,8 @@ impl EguiLayer {
         //     return None;
         // }
         // self.egui_repaint -= 1;
+        self.controller.update();
+
         let egui_input = self.egui_state.take_egui_input(&state.window);
         let egui_full_output = self.egui_ctx.run(egui_input, |ctx: &Context| {
             self.controller.ui_contents(ctx);
@@ -94,11 +98,25 @@ impl EguiLayer {
 
 struct Controller {
     count: i32,
+    fps:f32,
+    timer:Timer,
 }
 impl Controller {
-    fn new () -> Self {
+    fn new() -> Self {
         Self {
             count: 0,
+            fps:0.0,
+            timer:Timer::new()
+        }
+    }
+    fn update(&mut self) {
+        if self.count < 100 {
+            self.count += 1;
+        }
+        else{
+            self.count = 0;
+            self.fps = 100000.0 / self.timer.elapsed_in_millis();
+            self.timer.reset();
         }
     }
     fn ui_contents(&mut self, ctx: &egui::Context) {
@@ -123,17 +141,19 @@ impl Controller {
             .movable(true)
             .frame(panel_frame)
             .enabled(true);
+
         window.show(ctx, |ui| {
             ui.separator();
             ui.heading("LBM-Fluid Field Operations");
-            ui.horizontal_wrapped(|ui| {
-                if ui.button(RichText::new("add's button")).clicked() {
-                    self.count += 1;
-                };
-                ui.label(format!("count: {}", self.count));
-                ui.label(format!("count: {}", self.count));
-                // ui.colored_label(Color32::from_rgb(110, 235, 110), "add obstacles");
-            });
+            // ui.horizontal_wrapped(|ui| {
+            //     if ui.button(RichText::new("add's button")).clicked() {
+            //         self.count += 1;
+            //     };
+            //     ui.label(format!("count: {}", self.count));
+            //     ui.label(format!("fps: {:.1}", self.fps));
+            //     // ui.colored_label(Color32::from_rgb(110, 235, 110), "add obstacles");
+            // });
+            ui.label(format!("fps: {:.1}", self.fps));
         });
     }
 }

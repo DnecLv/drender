@@ -6,16 +6,28 @@ use winit::{
     window,
     window::{WindowBuilder, WindowId},
 };
-
+mod vertex;
 mod state;
 use state::State;
 mod renderer;
 use renderer::Renderer;
+use renderer::workflow::simple::DirectWorkFlow;
 mod plugin;
 use plugin::Plugin;
 mod egui_layer;
 use egui_layer::EguiLayer;
+
 pub struct Engine {
+    // ! 挂载渲染流程
+    // ! 这是在Renderer下的
+    // ! Renderer有非常多的渲染流程和资源
+    // ! 资源不应该在renderer加载，engine有加载资源的职责
+    // ! 渲染器接受资源，渲染流程，渲染指令，渲染目标
+    // ! 渲染目标在engine中创建？好像可以
+    // ! 场景的构建由controller完成
+    // ! 这两个都是可变的，渲染一帧前,controller会更新场景，渲染器会更新渲染流程
+    // ! 然后给renderer controller的不可变引用
+    // ! 给egui_layer controller的可变引用 
     state: State,
     // scene: Scene,
     renderer: Renderer,
@@ -45,7 +57,7 @@ impl Engine {
         let state = pollster::block_on(State::new(window));
         (
             Self {
-                renderer: Renderer::new(&state),
+                renderer: Renderer::new(),
                 egui_layer: EguiLayer::new(&state, &event_loop),
                 state: state,
                 plugins: vec![],
@@ -63,6 +75,9 @@ impl Engine {
         self.egui_layer.ui_event(event);
     }
     pub fn run(mut self, event_loop: EventLoop<CustomJsTriggerEvent>) {
+        let wkfl = DirectWorkFlow::new(&self.state);
+        self.renderer.add_process(wkfl);
+        
         event_loop.run(move |event, _, control_flow| {
             let window = &self.state.window;
 
@@ -117,16 +132,17 @@ impl Engine {
     }
     fn render(&mut self) -> Result<(), wgpu::SurfaceError> {
         // self.renderer.render(&self.state)
-        let output = self.state.surface.get_current_texture()?;
-        let view = output
-            .texture
-            .create_view(&wgpu::TextureViewDescriptor::default());
         let mut encoder =
             self.state
                 .device
                 .create_command_encoder(&wgpu::CommandEncoderDescriptor {
                     label: Some("Render Encoder"),
                 });
+
+        let output = self.state.surface.get_current_texture()?;
+        let view = output
+            .texture
+            .create_view(&wgpu::TextureViewDescriptor::default());
         self.renderer.render(&self.state, &mut encoder,&view);
         let ebuffer = self.egui_layer.render(&self.state, &mut encoder,&view);
         // drop(render_pass);
